@@ -1,0 +1,48 @@
+t1
+D:\rishabh study\MERN\FullStack\DEVOPS-PANEL\backend>node index.js
+◇ injected env (7) from .env
+◇ injected env (0) from .env
+◇ injected env (0) from .env
+◇ injected env (0) from .env
+MongoDB connected
+Backend running on port 4000
+
+t2
+D:\rishabh study\MERN\FullStack\DEVOPS-PANEL\worker>node src/worker.js                      
+◇ injected env (7) from .env
+◇ injected env (0) from .env
+Worker started — waiting for deploy jobs...
+
+t3
+D:\rishabh study\MERN\FullStack\DEVOPS-PANEL\frontend>npm run dev
+
+> frontend@0.0.0 dev
+> vite
+
+
+  VITE v8.3.2  ready in 1828 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+7:59:12 pm [vite] (client) [optimizer] bundling dependencies...
+
+t4
+D:\rishabh study\MERN\FullStack\DEVOPS-PANEL>docker run -d -p 6379:6379 redis:alpine
+Unable to find image 'redis:alpine' locally
+alpine: Pulling from library/redis
+095940d4ebca: Pull complete 
+d60026184d2e: Pull complete 
+8c9c3a906635: Pull complete 
+4f4fb700ef54: Pull complete 
+618072543738: Pull complete 
+2f1039339059: Pull complete 
+d0c1d894c237: Pull complete 
+2ea8415cd7b3: Download complete 
+10a82f6a874c: Download complete 
+Digest: sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+Status: Downloaded newer image for redis:alpine
+9b2b1fad247f4e2ce7038f11fad15776b956af39d62b1b4dae35596b312c2d78
+docker: Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint zealous_goodall (457dd5799611855305c9abee97b5f6d2084c3f7c9159dce2ab0f99f2cc5bf5d0): Bind for 0.0.0.0:6379 failed: port is already allocated
+
+Run 'docker run --help' for more information
