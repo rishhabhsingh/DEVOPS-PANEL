@@ -24,6 +24,9 @@ const Deployment = () => {
   const projectId = searchParams.get('projectId');
   const navigate = useNavigate();
 
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState('connecting');
   const [history, setHistory] = useState([]);
@@ -121,6 +124,20 @@ const Deployment = () => {
     disconnected: '🔌 Disconnected'
   };
 
+  const handleAnalyze = async () => {
+  setAnalyzing(true);
+  try {
+    const { data } = await api.post(`/ai/analyze/${deploymentId}`, {
+      logs
+    });
+    setAiAnalysis(data.explanation);
+  } catch (err) {
+    setAiAnalysis('Analysis failed. Please try again.');
+  } finally {
+    setAnalyzing(false);
+  }
+};
+
   return (
     <div className="min-h-screen bg-[#0f0f0f]">
 
@@ -140,10 +157,19 @@ const Deployment = () => {
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
 
         {/* Deployment ID */}
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold text-white">Deployment Logs</h1>
-          <p className="text-gray-500 text-sm font-mono">{deploymentId}</p>
-        </div>
+        <div className="flex items-center justify-between">
+  <div className="space-y-1">
+    <h1 className="text-xl font-bold text-white">Deployment Logs</h1>
+    <p className="text-gray-500 text-sm font-mono">{deploymentId}</p>
+  </div>
+  <Link
+    to={`/project/${projectId}/settings`}
+    className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300
+               px-4 py-2 rounded-lg transition-colors"
+  >
+    ⚙ Env Vars
+  </Link>
+</div>
 
         {/* Terminal */}
         <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl overflow-hidden">
@@ -184,6 +210,46 @@ const Deployment = () => {
           </div>
         </div>
 
+          {/* AI Analysis — only shows when deployment fails */}
+{status === 'error' && (
+  <div className="bg-[#161616] border border-red-900/50 rounded-xl p-6 space-y-4">
+    <div className="flex items-center justify-between">
+      <div className="space-y-1">
+        <h2 className="text-white font-semibold flex items-center gap-2">
+          🤖 AI Build Failure Analysis
+        </h2>
+        <p className="text-gray-500 text-xs">
+          Powered by Groq — explains what went wrong in plain English
+        </p>
+      </div>
+      {!aiAnalysis && (
+        <button
+          onClick={handleAnalyze}
+          disabled={analyzing}
+          className="bg-red-900/40 hover:bg-red-900/60 text-red-300
+                     font-semibold px-4 py-2 rounded-lg transition-all
+                     text-sm disabled:opacity-50"
+        >
+          {analyzing ? '🤔 Analyzing...' : '✦ Analyze Failure'}
+        </button>
+      )}
+    </div>
+
+    {aiAnalysis && (
+      <div className="bg-[#0f0f0f] rounded-xl p-4 space-y-3">
+        <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+          {aiAnalysis}
+        </div>
+        <button
+          onClick={() => setAiAnalysis('')}
+          className="text-gray-600 hover:text-gray-400 text-xs transition-colors"
+        >
+          Clear
+        </button>
+      </div>
+    )}
+  </div>
+)}
         {/* Deployment History + Rollback */}
         {history.length > 0 && (
           <div className="space-y-3">

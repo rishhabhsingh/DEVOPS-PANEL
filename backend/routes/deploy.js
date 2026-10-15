@@ -1,32 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const { Queue } = require('bullmq');
+const IORedis = require('ioredis');
 const CryptoJS = require('crypto-js');
 const Project = require('../models/Project');
 const Deployment = require('../models/Deployment');
 const { requireAuth } = require('./repos');
 require('dotenv').config();
 
-// Connect to the same Redis the worker is listening to
 const deployQueue = new Queue('deployments', {
-  connection: { host: 'localhost', port: 6379 }
+  connection: { host: '127.0.0.1', port: 6379 }
 });
 
-// Decrypt helper
 const decrypt = (ciphertext) => {
   const bytes = CryptoJS.AES.decrypt(ciphertext, process.env.ENCRYPTION_KEY);
   return bytes.toString(CryptoJS.enc.Utf8);
 };
 
-// Port allocator — finds a free port for the new container
-// Starts at 4001 and goes up
 const getNextPort = async () => {
   const lastProject = await Project.findOne({ port: { $exists: true } })
     .sort({ port: -1 });
   return lastProject ? lastProject.port + 1 : 4001;
 };
 
-// POST /deploy — trigger a new deployment
 router.post('/', requireAuth, async (req, res) => {
   const { repoFullName, repoName, branch = 'main' } = req.body;
 
@@ -35,17 +31,14 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   try {
-    // Find or create the project in MongoDB
     let project = await Project.findOne({
       userId: req.user._id,
       repoFullName
     });
 
     if (!project) {
-      // First deployment — create the project
       const port = await getNextPort();
       const subdomain = `${repoName.toLowerCase()}-${Date.now()}`;
-
       project = await Project.create({
         userId: req.user._id,
         repoName,
@@ -60,12 +53,10 @@ router.post('/', requireAuth, async (req, res) => {
       await project.save();
     }
 
-    // Count existing deployments to get version number
     const deploymentCount = await Deployment.countDocuments({
       projectId: project._id
     });
 
-    // Create deployment record in MongoDB
     const deployment = await Deployment.create({
       projectId: project._id,
       userId: req.user._id,
@@ -73,13 +64,40 @@ router.post('/', requireAuth, async (req, res) => {
       status: 'queued'
     });
 
-    // Decrypt GitHub token to pass to worker
     const githubToken = decrypt(req.user.githubAccessToken);
+    const io = req.app.get('io');
+    const deploymentIdStr = deployment._id.toString();
 
-    // Add job to BullMQ queue
-    // Worker picks this up automatically
+    // Set up Redis subscriber BEFORE adding job to queue
+    // So we don't miss any early log messages
+    const subscriber = new IORedis({ host: '127.0.0.1', port: 6379 });
+
+    subscriber.subscribe(`logs:${deploymentIdStr}`, (err) => {
+      if (err) {
+        console.error('Subscribe error:', err.message);
+      } else {
+        console.log(`Subscribed to logs:${deploymentIdStr}`);
+      }
+    });
+
+    subscriber.on('message', (channel, message) => {
+      try {
+        const data = JSON.parse(message);
+        console.log(`Emitting log to room: deployment:${deploymentIdStr}`);
+        io.to(`deployment:${deploymentIdStr}`).emit('log', data);
+
+        if (data.type === 'done' || data.type === 'error') {
+          subscriber.unsubscribe();
+          subscriber.quit();
+        }
+      } catch (e) {
+        console.error('Log parse error:', e.message);
+      }
+    });
+
+    // Add job AFTER subscriber is ready
     await deployQueue.add('deploy', {
-      deploymentId: deployment._id.toString(),
+      deploymentId: deploymentIdStr,
       projectId: project._id.toString(),
       repoFullName,
       branch,
@@ -88,7 +106,6 @@ router.post('/', requireAuth, async (req, res) => {
       envVars: project.envVars || []
     });
 
-    // Respond immediately — don't wait for Docker build
     res.json({
       message: 'Deployment queued',
       deploymentId: deployment._id,
@@ -103,7 +120,6 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// GET /deploy/:projectId/history — get all deployments for a project
 router.get('/:projectId/history', requireAuth, async (req, res) => {
   try {
     const deployments = await Deployment.find({
@@ -114,6 +130,41 @@ router.get('/:projectId/history', requireAuth, async (req, res) => {
     res.json({ deployments });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+router.post('/rollback', requireAuth, async (req, res) => {
+  const { deploymentId } = req.body;
+
+  try {
+    const deployment = await Deployment.findById(deploymentId);
+
+    if (!deployment) {
+      return res.status(404).json({ error: 'Deployment not found' });
+    }
+
+    if (deployment.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const project = await Project.findById(deployment.projectId);
+
+    await deployQueue.add('rollback', {
+      deploymentId: deployment._id.toString(),
+      projectId: project._id.toString(),
+      imageTag: deployment.imageTag,
+      port: project.port,
+      envVars: project.envVars || []
+    });
+
+    res.json({
+      message: 'Rollback queued',
+      targetVersion: deployment.version
+    });
+
+  } catch (err) {
+    console.error('Rollback error:', err.message);
+    res.status(500).json({ error: 'Failed to queue rollback' });
   }
 });
 

@@ -9,6 +9,8 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const { router: repoRoutes } = require('./routes/repos');
 const deployRoutes = require('./routes/deploy');
+const envVarRoutes = require('./routes/envvars');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,6 +36,8 @@ app.use(cors({
 app.use('/auth', authRoutes);
 app.use('/repos', repoRoutes);
 app.use('/deploy', deployRoutes);
+app.use('/envvars', envVarRoutes);
+app.use('/ai', aiRoutes);
 
 app.get('/health', (req, res) => {
   res.json({

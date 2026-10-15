@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
 
 const Dashboard = () => {
@@ -147,16 +147,20 @@ const Dashboard = () => {
                 </p>
               </div>
 
-              <button
-                onClick={() => handleDeploy(repo)}
-                disabled={deploying[repo.id]}
-                className="bg-white text-black font-semibold px-5 py-2
-                           rounded-lg hover:bg-gray-100 transition-all
-                           disabled:opacity-50 disabled:cursor-not-allowed
-                           text-sm whitespace-nowrap"
-              >
-                {deploying[repo.id] ? 'Queuing...' : 'Deploy →'}
-              </button>
+              <div className="flex items-center gap-2">
+  <button
+    onClick={() => handleDeploy(repo)}
+    disabled={deploying[repo.id]}
+    className="bg-white text-black font-semibold px-5 py-2
+               rounded-lg hover:bg-gray-100 transition-all
+               disabled:opacity-50 disabled:cursor-not-allowed
+               text-sm whitespace-nowrap"
+  >
+    {deploying[repo.id] ? 'Queuing...' : 'Deploy →'}
+  </button>
+</div>
+              
+              
             </div>
           ))}
         </div>
